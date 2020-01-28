@@ -2,6 +2,8 @@ package com.example.demo.controllers;
 
 import java.util.List;
 
+import com.example.demo.bean.SplunkLog;
+import com.example.demo.services.SplunkLoggingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,12 +30,18 @@ public class OrderController {
 	
 	@Autowired
 	private OrderRepository orderRepository;
+
+	@Autowired
+	SplunkLoggingService splunkLoggingService;
 	
 	
 	@PostMapping("/submit/{username}")
 	public ResponseEntity<UserOrder> submit(@PathVariable String username) {
 		User user = userRepository.findByUsername(username);
 		if(user == null) {
+			SplunkLog splunkLog = new SplunkLog();
+			splunkLog.addField("order_submit_failure",username);
+			splunkLoggingService.logToSplunk(splunkLog);
 			return ResponseEntity.notFound().build();
 		}
 		UserOrder order = UserOrder.createFromCart(user.getCart());
@@ -55,8 +63,10 @@ public class OrderController {
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<String> logNotCaughtException(Exception ex) {
 		logger.error("The following error has been raised: {}", ex.getMessage());
-
-		return new ResponseEntity<String>("error", new HttpHeaders(), HttpStatus.BAD_REQUEST);
+		SplunkLog splunkLog = new SplunkLog();
+		splunkLog.addField("error",ex.getMessage());
+		splunkLoggingService.logToSplunk(splunkLog);
+		return new ResponseEntity<String>(ex.getMessage(), new HttpHeaders(), HttpStatus.BAD_REQUEST);
 	}
 
 

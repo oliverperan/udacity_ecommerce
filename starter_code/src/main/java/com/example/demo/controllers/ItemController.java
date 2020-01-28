@@ -2,6 +2,8 @@ package com.example.demo.controllers;
 
 import java.util.List;
 
+import com.example.demo.bean.SplunkLog;
+import com.example.demo.services.SplunkLoggingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +23,9 @@ public class ItemController {
 
 	@Autowired
 	private ItemRepository itemRepository;
+
+	@Autowired
+	private SplunkLoggingService splunkLoggingService;
 	
 	@GetMapping
 	public ResponseEntity<List<Item>> getItems() {
@@ -46,7 +51,12 @@ public class ItemController {
 	public ResponseEntity<String> logNotCaughtException(Exception ex) {
 		logger.error("The following error has been raised: {}", ex.getMessage());
 
-		return new ResponseEntity<String>("error", new HttpHeaders(), HttpStatus.BAD_REQUEST);
+		SplunkLog splunkLog = new SplunkLog();
+		splunkLog.addField("error",ex.getMessage());
+
+		splunkLoggingService.logToSplunk(splunkLog);
+
+		return new ResponseEntity<String>(ex.getMessage(), new HttpHeaders(), HttpStatus.BAD_REQUEST);
 	}
 
 

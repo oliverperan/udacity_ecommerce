@@ -2,6 +2,8 @@ package com.example.demo.controllers;
 
 import java.util.Optional;
 
+import com.example.demo.bean.SplunkLog;
+import com.example.demo.services.SplunkLoggingService;
 import org.apache.coyote.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +35,9 @@ public class UserController {
 	@Autowired
 	private BCryptPasswordEncoder bCryptPasswordEncoder;
 
+	@Autowired
+	private SplunkLoggingService splunkLoggingService;
+
 	@GetMapping("/id/{id}")
 	public ResponseEntity<User> findById(@PathVariable Long id) {
 		return ResponseEntity.of(userRepository.findById(id));
@@ -41,6 +46,9 @@ public class UserController {
 	@GetMapping("/{username}")
 	public ResponseEntity<User> findByUserName(@PathVariable String username) {
 		User user = userRepository.findByUsername(username);
+
+
+
 		return user == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(user);
 	}
 
@@ -54,14 +62,24 @@ public class UserController {
 		user.setCart(cart);
 
 		if((createUserRequest.getPassword().length() < 7) || (!createUserRequest.getPassword().equals(createUserRequest.getConfirmPassword()))) {
-			logger.error("error creating user:"+user.toString());
+			SplunkLog splunkLog = new SplunkLog();
+
+			splunkLog.addField("user_creation_failed", createUserRequest.getUsername());
+			splunkLog.addField("user_creation_failed", createUserRequest.getPassword());
+			splunkLog.addField("user_creation_failed", createUserRequest.getConfirmPassword());
+
+			splunkLoggingService.logToSplunk(splunkLog);
+
 			return ResponseEntity.badRequest().build();
 		}
 
 		userRepository.save(user);
 
-		//logs creation of user
-		logger.info("User createad with name {}", user.getUsername());
+		SplunkLog splunkLog = new SplunkLog();
+
+		splunkLog.addField("user_created",user.getUsername());
+
+		splunkLoggingService.logToSplunk(splunkLog);
 
 		return ResponseEntity.ok(user);
 	}
@@ -70,8 +88,10 @@ public class UserController {
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<String> logNotCaughtException(Exception ex) {
 		logger.error("The following error has been raised: {}", ex.getMessage());
-
-		return new ResponseEntity<String>("error", new HttpHeaders(), HttpStatus.BAD_REQUEST);
+		SplunkLog splunkLog = new SplunkLog();
+		splunkLog.addField("error",ex.getMessage());
+		splunkLoggingService.logToSplunk(splunkLog);
+		return new ResponseEntity<String>(ex.getMessage(), new HttpHeaders(), HttpStatus.BAD_REQUEST);
 	}
 
 
